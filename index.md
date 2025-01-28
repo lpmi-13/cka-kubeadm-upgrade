@@ -37,6 +37,417 @@ tagz:
   - cka
 
 tasks:
+
+  init_node_01_configure_control_plane:
+      name: init_node_01_configure_control_plane
+      machine: node-01
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_01_install_k8s
+          - init_node_01_configure_networking
+          - init_node_01_configure_routes
+      run: "#!/bin/bash\nset -e\n\nIP_ADDRESS=$(ifconfig | grep -A 2 eth0 | grep \"inet \" | awk '{print $2}')\n\nPOD_CIDR=\"192.168.0.0/16\"\n\nkubeadm init --apiserver-advertise-address=$IP_ADDRESS --apiserver-cert-extra-sans=$IP_ADDRESS --pod-network-cidr=$POD_CIDR --node-name \"control-01\"\n\nmkdir -p $HOME/.kube\ncp -i /etc/kubernetes/admin.conf $HOME/.kube/config\nchown $(id -u):$(id -g) $HOME/.kube/config\n\n### and here is where we run the join command via ssh\nJOIN_COMMAND=$(kubeadm token create --print-join-command)\n\nfor node in node-02 node-03; do\n\n    echo \"Waiting for /tmp/all_done on $node...\"\n    while ! ssh $node \"screen -d -m test -f /tmp/all_done\"; do\n        sleep 5\n        echo \"Still waiting for /tmp/all_done on $node...\"\n    done\n    \n    echo \"File found on $node, proceeding with join command...\"\n\n    case $node in\n        \"node-02\")\n            ssh $node -f \"screen -d -m $JOIN_COMMAND --node-name 'worker-01'\"\n            ;;\n        \"node-03\")\n            ssh $node -f \"screen -d -m $JOIN_COMMAND --node-name 'worker-02'\"\n            ;;\n    esac\ndone\n\n"
+  init_node_01_configure_networking:
+      name: init_node_01_configure_networking
+      machine: node-01
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_01_install_k8s
+      run: |
+          #!/bin/bash
+          set -e
+
+          cat > /etc/cni/net.d/99-loopback.conf <<EOF
+          {
+            "cniVersion": "1.1.0",
+            "name": "lo",
+            "type": "loopback"
+          }
+          EOF
+
+          cat > /etc/cni/net.d/10-bridge.conf <<EOF
+          {
+            "cniVersion": "1.0.0",
+            "name": "bridge",
+            "type": "bridge",
+            "bridge": "cni0",
+            "isGateway": true,
+            "ipMasq": true,
+            "ipam": {
+              "type": "host-local",
+              "ranges": [
+                [{"subnet": "10.244.0.0/24"}]
+              ],
+              "routes": [{"dst": "0.0.0.0/0"}]
+            }
+          }
+          EOF
+  init_node_01_configure_routes:
+      name: init_node_01_configure_routes
+      machine: node-01
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_01_install_k8s
+      run: |-
+          ip route add 10.244.1.0/24 via 172.16.0.3  # worker-01
+          ip route add 10.244.2.0/24 via 172.16.0.4  # worker-02
+  init_node_01_configure_ssh:
+      name: init_node_01_configure_ssh
+      machine: node-01
+      init: true
+      user: root
+      timeout_seconds: 300
+      run: |
+          #!/bin/bash
+          set -e
+
+          cat > ~/.ssh/config <<EOF
+          Host *
+            StrictHostKeyChecking no
+          EOF
+  init_node_01_install_k8s:
+      name: init_node_01_install_k8s
+      machine: node-01
+      init: true
+      user: root
+      timeout_seconds: 300
+      run: |-
+          #!/bin/bash
+          set -e
+
+          cat <<EOF | tee /etc/modules-load.d/k8s.conf
+          overlay
+          br_netfilter
+          EOF
+
+          modprobe overlay
+          modprobe br_netfilter
+
+          # sysctl params required by setup, params persist across reboots
+          cat <<EOF | tee /etc/sysctl.d/k8s.conf
+          net.bridge.bridge-nf-call-iptables  = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward                 = 1
+          EOF
+
+          # Apply sysctl params without reboot
+          sysctl --system
+
+          swapoff -a
+
+          apt-get update -y
+          apt-get install -y software-properties-common gpg curl apt-transport-https ca-certificates screen
+
+          curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+
+          apt-get update -y
+          apt-get install -y cri-o
+
+          systemctl daemon-reload
+          systemctl enable crio --now
+          systemctl start crio.service
+
+
+          VERSION="v1.30.0"
+          wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz
+          tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+          rm -f crictl-$VERSION-linux-amd64.tar.gz
+
+
+          KUBERNETES_VERSION=1.30
+
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
+
+          apt-get update -y
+
+          apt-get install -y kubelet kubeadm kubectl
+
+          apt-mark hold kubelet kubeadm kubectl
+
+          apt-get install -y jq
+          local_ip="$(ip --json addr show eth0 | jq -r '.[0].addr_info[] | select(.family == "inet") | .local')"
+
+          cat << EOF | tee /etc/default/kubelet
+          KUBELET_EXTRA_ARGS=--node-ip=$local_ip
+          EOF
+  init_node_02_configure_networking:
+      name: init_node_02_configure_networking
+      machine: node-02
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_02_install_k8s
+      run: |
+          #!/bin/bash
+          set -e
+
+          cat > /etc/cni/net.d/99-loopback.conf <<EOF
+          {
+            "cniVersion": "1.1.0",
+            "name": "lo",
+            "type": "loopback"
+          }
+          EOF
+
+          cat > /etc/cni/net.d/10-bridge.conf <<EOF
+          {
+            "cniVersion": "1.0.0",
+            "name": "bridge",
+            "type": "bridge",
+            "bridge": "cni0",
+            "isGateway": true,
+            "ipMasq": true,
+            "ipam": {
+              "type": "host-local",
+              "ranges": [
+                [{"subnet": "10.244.1.0/24"}]
+              ],
+              "routes": [{"dst": "0.0.0.0/0"}]
+            }
+          }
+          EOF
+  init_node_02_configure_routes:
+      name: init_node_02_configure_routes
+      machine: node-02
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_02_install_k8s
+      run: |
+          ip route add 10.244.0.0/24 via 172.16.0.2  # cplane
+          ip route add 10.244.2.0/24 via 172.16.0.4  # worker-02
+  init_node_02_install_k8s:
+      name: init_node_02_install_k8s
+      machine: node-02
+      init: true
+      user: root
+      timeout_seconds: 300
+      run: |-
+          #!/bin/bash
+          set -e
+
+          cat <<EOF | tee /etc/modules-load.d/k8s.conf
+          overlay
+          br_netfilter
+          EOF
+
+          modprobe overlay
+          modprobe br_netfilter
+
+          # sysctl params required by setup, params persist across reboots
+          cat <<EOF | tee /etc/sysctl.d/k8s.conf
+          net.bridge.bridge-nf-call-iptables  = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward                 = 1
+          EOF
+
+          # Apply sysctl params without reboot
+          sysctl --system
+
+          swapoff -a
+
+          apt-get update -y
+          apt-get install -y software-properties-common gpg curl apt-transport-https ca-certificates screen
+
+          curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+
+          apt-get update -y
+          apt-get install -y cri-o
+
+          systemctl daemon-reload
+          systemctl enable crio --now
+          systemctl start crio.service
+
+
+          VERSION="v1.30.0"
+          wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz
+          tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+          rm -f crictl-$VERSION-linux-amd64.tar.gz
+
+
+          KUBERNETES_VERSION=1.30
+
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
+
+          apt-get update -y
+
+          apt-get install -y kubelet kubeadm kubectl
+
+          apt-mark hold kubelet kubeadm kubectl
+
+          apt-get install -y jq
+          local_ip="$(ip --json addr show eth0 | jq -r '.[0].addr_info[] | select(.family == "inet") | .local')"
+
+          cat << EOF | tee /etc/default/kubelet
+          KUBELET_EXTRA_ARGS=--node-ip=$local_ip
+          EOF
+  init_node_02_write_success_file:
+      name: init_node_02_write_success_file
+      machine: node-02
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_02_configure_networking
+          - init_node_02_configure_routes
+          - init_node_02_install_k8s
+      run: |
+          #!/bin/bash
+          set -e
+
+          echo "done" >> /tmp/all_done
+  init_node_03_configure_networking:
+      name: init_node_03_configure_networking
+      machine: node-03
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_03_install_k8s
+      run: |
+          #!/bin/bash
+          set -e
+
+          cat > /etc/cni/net.d/99-loopback.conf <<EOF
+          {
+            "cniVersion": "1.1.0",
+            "name": "lo",
+            "type": "loopback"
+          }
+          EOF
+
+          cat > /etc/cni/net.d/10-bridge.conf <<EOF
+          {
+            "cniVersion": "1.0.0",
+            "name": "bridge",
+            "type": "bridge",
+            "bridge": "cni0",
+            "isGateway": true,
+            "ipMasq": true,
+            "ipam": {
+              "type": "host-local",
+              "ranges": [
+                [{"subnet": "10.244.2.0/24"}]
+              ],
+              "routes": [{"dst": "0.0.0.0/0"}]
+            }
+          }
+          EOF
+  init_node_03_configure_routes:
+      name: init_node_03_configure_routes
+      machine: node-03
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_03_install_k8s
+      run: |-
+          ip route add 10.244.0.0/24 via 172.16.0.2  # cplane
+          ip route add 10.244.1.0/24 via 172.16.0.3  # worker-01
+  init_node_03_install_k8s:
+      name: init_node_03_install_k8s
+      machine: node-03
+      init: true
+      user: root
+      timeout_seconds: 300
+      run: |-
+          #!/bin/bash
+          set -e
+
+          cat <<EOF | tee /etc/modules-load.d/k8s.conf
+          overlay
+          br_netfilter
+          EOF
+
+          modprobe overlay
+          modprobe br_netfilter
+
+          # sysctl params required by setup, params persist across reboots
+          cat <<EOF | tee /etc/sysctl.d/k8s.conf
+          net.bridge.bridge-nf-call-iptables  = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward                 = 1
+          EOF
+
+          # Apply sysctl params without reboot
+          sysctl --system
+
+          swapoff -a
+
+          apt-get update -y
+          apt-get install -y software-properties-common gpg curl apt-transport-https ca-certificates screen
+
+          curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+
+          apt-get update -y
+          apt-get install -y cri-o
+
+          systemctl daemon-reload
+          systemctl enable crio --now
+          systemctl start crio.service
+
+
+          VERSION="v1.30.0"
+          wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz
+          tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
+          rm -f crictl-$VERSION-linux-amd64.tar.gz
+
+
+          KUBERNETES_VERSION=1.30
+
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
+
+          apt-get update -y
+
+          apt-get install -y kubelet kubeadm kubectl
+
+          apt-mark hold kubelet kubeadm kubectl
+
+          apt-get install -y jq
+          local_ip="$(ip --json addr show eth0 | jq -r '.[0].addr_info[] | select(.family == "inet") | .local')"
+
+          cat << EOF | tee /etc/default/kubelet
+          KUBELET_EXTRA_ARGS=--node-ip=$local_ip
+          EOF
+  init_node_03_write_success_file:
+      name: init_node_03_write_success_file
+      machine: node-03
+      init: true
+      user: root
+      timeout_seconds: 300
+      needs:
+          - init_node_03_configure_networking
+          - init_node_03_configure_routes
+          - init_node_03_install_k8s
+      run: |
+        #!/bin/bash
+        set -e
+
+        echo "done" >> /tmp/all_done
+
+# 
+# These are where the actual challenge tasks start. Everything above is just setting up the k8s cluster
+# 
   verify_controlplane_kubeadm:
     machine: node-01
     run: |
@@ -188,29 +599,20 @@ Checking control plane kubeadm version...
 Great! Control plane kubeadm has been upgraded to version 1.31.
 ::
 
+
+
 ::hint-box
 ---
 :summary: Hint 1
 ---
-You'll need to unhold kubeadm first:
-```bash
-apt-mark unhold kubeadm
-```
+Follow the guide in the [official docs](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
 ::
-
 
 ::hint-box
 ---
 :summary: Hint 2
 ---
-You also need to add version 1.31 to your sources list:
-```bash
-KUBERNETES_VERSION=1.31
-mkdir -p /etc/apt/keyrings
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
-```
-After installing `kubeadm`, then verify with: `kubeadm version`
+If you need help adding the new minor version package repository, read [these docs](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/change-package-repository/#switching-to-another-kubernetes-package-repository).
 ::
 
 Next, upgrade the control plane:
@@ -231,22 +633,7 @@ Excellent! The API server, controller manager, and scheduler are now running ver
 ---
 :summary: Hint 3
 ---
-1. Plan the upgrade:
-```bash
-kubeadm upgrade plan
-```
-
-2. Apply the upgrade
-```bash
-kubeadm upgrade apply v1.31.x
-```
-
-3. Verify the upgrade
-```bash
-kubectl get pods -n kube-system
-```
-
-Look for kube-apiserver, kube-controller-manager, and kube-scheduler pods
+You can follow the steps [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/#upgrading-control-plane-nodes)
 ::
 
 Next, upgrade the control plane components:
@@ -267,24 +654,7 @@ Excellent! All control plane components are now running version 1.31.
 ---
 :summary: Hint 4
 ---
-1. Plan the upgrade:
-```bash
-kubeadm upgrade plan
-```
-
-2. Apply the upgrade:
-```bash
-kubeadm upgrade apply v1.31.x
-```
-
-3. Upgrade kubelet and kubectl:
-```bash
-apt-mark unhold kubelet kubectl
-apt-get install -y kubelet=1.31.x-* kubectl=1.31.x-*
-apt-mark hold kubelet kubectl
-systemctl daemon-reload
-systemctl restart kubelet
-```
+The steps to upgrade the components (kubelet and kubectl) are [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/#upgrade-kubelet-and-kubectl).
 ::
 
 Now, upgrade kubeadm on the worker nodes:
@@ -317,13 +687,7 @@ Perfect! Worker node-03 kubeadm package has been upgraded.
 ---
 :summary: Hint 5
 ---
-On each worker node:
-```bash
-apt-mark unhold kubeadm
-apt-get update && apt-get install -y kubeadm=1.31.x-*
-apt-mark hold kubeadm
-```
-Then verify with: `kubeadm version`
+The process to upgrade each worker node is [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
 ::
 
 Upgrade the worker node components on node02:
@@ -344,27 +708,7 @@ Great! Worker node-02 components are now running version 1.31.
 ---
 :summary: Hint 6
 ---
-For each worker node:
-1. Drain the node:
-```bash
-kubectl drain node-0x --ignore-daemonsets
-```
-2. Upgrade the node:
-```bash
-kubeadm upgrade node
-```
-3. Upgrade kubelet and kubectl:
-```bash
-apt-mark unhold kubelet kubectl
-apt-get install -y kubelet=1.31.x-* kubectl=1.31.x-*
-apt-mark hold kubelet kubectl
-systemctl daemon-reload
-systemctl restart kubelet
-```
-4. Uncordon the node:
-```bash
-kubectl uncordon node-0x
-```
+Remember to run `kubeadm upgrade node` instead of `kubeadm upgrade plan`.
 ::
 
 
@@ -386,27 +730,7 @@ Great! Worker node-03 components are now running version 1.31.
 ---
 :summary: Hint 7
 ---
-For each worker node:
-1. Drain the node:
-```bash
-kubectl drain node-0x --ignore-daemonsets
-```
-2. Upgrade the node:
-```bash
-kubeadm upgrade node
-```
-3. Upgrade kubelet and kubectl:
-```bash
-apt-mark unhold kubelet kubectl
-apt-get install -y kubelet=1.31.x-* kubectl=1.31.x-*
-apt-mark hold kubelet kubectl
-systemctl daemon-reload
-systemctl restart kubelet
-```
-4. Uncordon the node:
-```bash
-kubectl uncordon node-0x
-```
+For each worker node, you can follow the steps [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/#upgrade-kubelet-and-kubectl).
 ::
 
 Finally, verify the cluster is healthy:
@@ -431,7 +755,7 @@ Verify cluster health with:
 ```bash
 kubectl get nodes
 kubectl get pods -A
-kubectl get componentstatuses
+kubectl get --raw='/readyz?verbose'
 ```
 Make sure all nodes are Ready and all pods are Running.
 ::
