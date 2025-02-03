@@ -7,7 +7,7 @@ description: |
 kind: challenge
 
 playground:
-  name: custom-18fa3073
+  name: mini-lan-ubuntu
 
   tabs:
   - machine: node-01
@@ -38,6 +38,11 @@ tagz:
 
 tasks:
 
+#
+# All of these init tasks are directly in the challenge markdown because it's not currently possible to reference a custom
+# playground when creating a challenge. The current accepted solution is to use the public playground and add init tasks
+# on top of it to add any customizations.
+#
   init_node_01_configure_control_plane:
       name: init_node_01_configure_control_plane
       machine: node-01
