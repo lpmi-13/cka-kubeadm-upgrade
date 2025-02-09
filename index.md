@@ -722,30 +722,30 @@ Perfect! Worker node-03 kubeadm package has been upgraded.
 The process to upgrade each worker node is [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
 ::
 
-Upgrade the worker node-02 itself
+Upgrade the worker node-02 itself:
 ::simple-task
 ---
 :tasks: tasks
 :name: verify_worker_kubeadm_upgrade_node02
 ---
 #active
-verifying node upgrade...
+Verifying node upgrade...
 
 #completed
-node-02 has been successfully upgraded
+Node-02 has been successfully upgraded
 ::
 
-Upgrade the worker node-03 itself
+Upgrade the worker node-03 itself:
 ::simple-task
 ---
 :tasks: tasks
 :name: verify_worker_kubeadm_upgrade_node03
 ---
 #active
-verifying node upgrade...
+Verifying node upgrade...
 
 #completed
-node-03 has been successfully upgraded
+Node-03 has been successfully upgraded
 ::
 
 ::hint-box
