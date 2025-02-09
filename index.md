@@ -520,10 +520,37 @@ tasks:
         exit 1
       fi
 
-  verify_worker_components_node02:
+  verify_worker_kubeadm_upgrade_node02:
     machine: node-02
     needs:
       - verify_worker_kubeadm_node02
+    run: |
+      if [ -d "/etc/kubernetes/tmp" ]; then
+        echo "The directory /etc/kubernetes/tmp exists."
+        exit 0
+      else
+        echo "The directory /etc/kubernetes/tmp does not exist."
+        exit 1
+      fi
+
+
+  verify_worker_kubeadm_upgrade_node03:
+    machine: node-03
+    needs:
+      - verify_worker_kubeadm_node03
+    run: |
+      if [ -d "/etc/kubernetes/tmp" ]; then
+        echo "The directory /etc/kubernetes/tmp exists."
+        exit 0
+      else
+        echo "The directory /etc/kubernetes/tmp does not exist."
+        exit 1
+      fi
+
+  verify_worker_components_node02:
+    machine: node-02
+    needs:
+      - verify_worker_kubeadm_upgrade_node02
     run: |
       WORKER2_VERSION=$(kubelet --version | awk '{print $2}')
       if [[ "$WORKER2_VERSION" == "v1.31."* ]]; then
@@ -536,7 +563,7 @@ tasks:
   verify_worker_components_node03:
     machine: node-03
     needs:
-      - verify_worker_kubeadm_node03
+      - verify_worker_kubeadm_upgrade_node03
     run: |
       WORKER3_VERSION=$(kubelet --version | awk '{print $2}')
       if [[ "$WORKER3_VERSION" == "v1.31."* ]]; then
@@ -695,6 +722,39 @@ Perfect! Worker node-03 kubeadm package has been upgraded.
 The process to upgrade each worker node is [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
 ::
 
+Upgrade the worker node-02 itself
+::simple-task
+---
+:tasks: tasks
+:name: verify_worker_kubeadm_upgrade_node02
+---
+#active
+verifying node upgrade...
+
+#completed
+node-02 has been successfully upgraded
+::
+
+Upgrade the worker node-03 itself
+::simple-task
+---
+:tasks: tasks
+:name: verify_worker_kubeadm_upgrade_node03
+---
+#active
+verifying node upgrade...
+
+#completed
+node-03 has been successfully upgraded
+::
+
+::hint-box
+---
+:summary: Hint 6
+---
+Remember to run `kubeadm upgrade node` instead of `kubeadm upgrade plan`.
+::
+
 Upgrade the worker node components on node02:
 
 ::simple-task
@@ -711,9 +771,13 @@ Great! Worker node-02 components are now running version 1.31.
 
 ::hint-box
 ---
-:summary: Hint 6
+:summary: Hint 7
 ---
-Remember to run `kubeadm upgrade node` instead of `kubeadm upgrade plan`.
+Remember to restart the system-daemon and the kubelet
+```
+systemctl daemon-reload
+systemctl restart kubelet
+```
 ::
 
 
@@ -733,7 +797,7 @@ Great! Worker node-03 components are now running version 1.31.
 
 ::hint-box
 ---
-:summary: Hint 7
+:summary: Hint 8
 ---
 For each worker node, you can follow the steps [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/#upgrade-kubelet-and-kubectl).
 ::
@@ -754,7 +818,7 @@ Congratulations! The cluster has been successfully upgraded and all components a
 
 ::hint-box
 ---
-:summary: Hint 8
+:summary: Hint 9
 ---
 Verify cluster health with:
 ```bash
