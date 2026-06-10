@@ -2,7 +2,7 @@
 title: 'CKA Practice: Upgrade Multi-Node Kubernetes Cluster'
 
 description: |
-  This exercise tests your ability to safely upgrade a multi-node Kubernetes cluster from version 1.30 to 1.31 following the standard upgrade procedure.
+  This exercise tests your ability to safely upgrade a multi-node Kubernetes cluster from version 1.34 to 1.35 following the standard upgrade procedure.
 
 kind: challenge
 
@@ -23,10 +23,10 @@ playground:
     - name: node-02
     - name: node-03
 
-cover: __static__/kubeadm-upgrade.png
+cover: __static__/kubeadm-upgrade-1.34-1.35.png
 
 createdAt: 2025-01-10
-updatedAt: 2025-01-15
+updatedAt: 2026-06-10
 
 difficulty: easy
 
@@ -149,33 +149,34 @@ tasks:
           apt-get update -y
           apt-get install -y software-properties-common gpg curl apt-transport-https ca-certificates screen
 
-          curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+          KUBERNETES_VERSION=1.34
+          CRIO_VERSION=v1.34
 
-          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/isv:/cri-o:/stable:/$CRIO_VERSION/deb/Release.key |  gpg --dearmor --yes -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://download.opensuse.org/repositories/isv:/cri-o:/stable:/$CRIO_VERSION/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
 
           apt-get update -y
-          apt-get install -y cri-o
+          apt-get install -y cri-o=1.34.8-1.1
 
           systemctl daemon-reload
           systemctl enable crio --now
           systemctl start crio.service
 
 
-          VERSION="v1.30.0"
+          VERSION="v1.34.0"
           wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz
           tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
           rm -f crictl-$VERSION-linux-amd64.tar.gz
 
 
-          KUBERNETES_VERSION=1.30
-
-          mkdir -p /etc/apt/keyrings
-          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
           echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 
           apt-get update -y
 
-          apt-get install -y kubelet kubeadm kubectl
+          apt-get install -y kubelet=1.34.8-1.1 kubeadm=1.34.8-1.1 kubectl=1.34.8-1.1
 
           apt-mark hold kubelet kubeadm kubectl
 
@@ -266,33 +267,34 @@ tasks:
           apt-get update -y
           apt-get install -y software-properties-common gpg curl apt-transport-https ca-certificates screen
 
-          curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+          KUBERNETES_VERSION=1.34
+          CRIO_VERSION=v1.34
 
-          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/isv:/cri-o:/stable:/$CRIO_VERSION/deb/Release.key |  gpg --dearmor --yes -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://download.opensuse.org/repositories/isv:/cri-o:/stable:/$CRIO_VERSION/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
 
           apt-get update -y
-          apt-get install -y cri-o
+          apt-get install -y cri-o=1.34.8-1.1
 
           systemctl daemon-reload
           systemctl enable crio --now
           systemctl start crio.service
 
 
-          VERSION="v1.30.0"
+          VERSION="v1.34.0"
           wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz
           tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
           rm -f crictl-$VERSION-linux-amd64.tar.gz
 
 
-          KUBERNETES_VERSION=1.30
-
-          mkdir -p /etc/apt/keyrings
-          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
           echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 
           apt-get update -y
 
-          apt-get install -y kubelet kubeadm kubectl
+          apt-get install -y kubelet=1.34.8-1.1 kubeadm=1.34.8-1.1 kubectl=1.34.8-1.1
 
           apt-mark hold kubelet kubeadm kubectl
 
@@ -398,33 +400,34 @@ tasks:
           apt-get update -y
           apt-get install -y software-properties-common gpg curl apt-transport-https ca-certificates screen
 
-          curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+          KUBERNETES_VERSION=1.34
+          CRIO_VERSION=v1.34
 
-          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/isv:/cri-o:/stable:/$CRIO_VERSION/deb/Release.key |  gpg --dearmor --yes -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://download.opensuse.org/repositories/isv:/cri-o:/stable:/$CRIO_VERSION/deb/ /" | tee /etc/apt/sources.list.d/cri-o.list
 
           apt-get update -y
-          apt-get install -y cri-o
+          apt-get install -y cri-o=1.34.8-1.1
 
           systemctl daemon-reload
           systemctl enable crio --now
           systemctl start crio.service
 
 
-          VERSION="v1.30.0"
+          VERSION="v1.34.0"
           wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz
           tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin
           rm -f crictl-$VERSION-linux-amd64.tar.gz
 
 
-          KUBERNETES_VERSION=1.30
-
-          mkdir -p /etc/apt/keyrings
-          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/Release.key |  gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
           echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$KUBERNETES_VERSION/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 
           apt-get update -y
 
-          apt-get install -y kubelet kubeadm kubectl
+          apt-get install -y kubelet=1.34.8-1.1 kubeadm=1.34.8-1.1 kubectl=1.34.8-1.1
 
           apt-mark hold kubelet kubeadm kubectl
 
@@ -457,7 +460,7 @@ tasks:
     machine: node-01
     run: |
       KUBEADM_VERSION=$(kubeadm version -o json | jq -r '.clientVersion.gitVersion')
-      if [[ "$KUBEADM_VERSION" == "v1.31."* ]]; then
+      if [[ "$KUBEADM_VERSION" == "v1.35."* ]]; then
         echo "Control plane kubeadm upgraded successfully!"
         exit 0
       else
@@ -475,9 +478,9 @@ tasks:
 
       SCHEDULER_VERSION=$(kubectl get pods -n kube-system -l component=kube-scheduler -o jsonpath="{.items[0].spec.containers[0].image}" | cut -d ':' -f 2)
 
-      if [[ "$API_SERVER_VERSION" == "v1.31."* ]] && \
-         [[ "$CONTROLLER_VERSION" == "v1.31."* ]] && \
-         [[ "$SCHEDULER_VERSION" == "v1.31."* ]]; then
+      if [[ "$API_SERVER_VERSION" == "v1.35."* ]] && \
+         [[ "$CONTROLLER_VERSION" == "v1.35."* ]] && \
+         [[ "$SCHEDULER_VERSION" == "v1.35."* ]]; then
          echo "Control plane components upgraded successfully!"
          exit 0
       else
@@ -490,7 +493,7 @@ tasks:
       - verify_controlplane_upgrade
     run: |
       API_VERSION=$(kubectl get nodes control-01 -o jsonpath='{.status.nodeInfo.kubeletVersion}')
-      if [[ "$API_VERSION" == "v1.31."* ]]; then
+      if [[ "$API_VERSION" == "v1.35."* ]]; then
         echo "Control plane components upgraded successfully!"
         exit 0
       else
@@ -502,7 +505,7 @@ tasks:
     machine: node-02
     run: |
       KUBEADM_VERSION=$(kubeadm version -o json | jq -r '.clientVersion.gitVersion')
-      if [[ "$KUBEADM_VERSION" == "v1.31."* ]]; then
+      if [[ "$KUBEADM_VERSION" == "v1.35."* ]]; then
         echo "Worker node-02 kubeadm upgraded successfully!"
         exit 0
       else
@@ -513,7 +516,7 @@ tasks:
     machine: node-03
     run: |
       KUBEADM_VERSION=$(kubeadm version -o json | jq -r '.clientVersion.gitVersion')
-      if [[ "$KUBEADM_VERSION" == "v1.31."* ]]; then
+      if [[ "$KUBEADM_VERSION" == "v1.35."* ]]; then
         echo "Worker node-03 kubeadm upgraded successfully!"
         exit 0
       else
@@ -553,7 +556,7 @@ tasks:
       - verify_worker_kubeadm_upgrade_node02
     run: |
       WORKER2_VERSION=$(kubelet --version | awk '{print $2}')
-      if [[ "$WORKER2_VERSION" == "v1.31."* ]]; then
+      if [[ "$WORKER2_VERSION" == "v1.35."* ]]; then
         echo "Worker node-02 components upgraded successfully!"
         exit 0
       else
@@ -566,7 +569,7 @@ tasks:
       - verify_worker_kubeadm_upgrade_node03
     run: |
       WORKER3_VERSION=$(kubelet --version | awk '{print $2}')
-      if [[ "$WORKER3_VERSION" == "v1.31."* ]]; then
+      if [[ "$WORKER3_VERSION" == "v1.35."* ]]; then
         echo "Worker node-03 components upgraded successfully!"
         exit 0
       else
@@ -577,6 +580,8 @@ tasks:
     machine: node-01
     needs:
       - verify_controlplane_components
+      - verify_worker_components_node02
+      - verify_worker_components_node03
     run: |
       VERSIONS=$(kubectl get nodes -o custom-columns=VERSION:.status.nodeInfo.kubeletVersion | tail -n 3 | uniq | wc -l)
 
@@ -593,18 +598,13 @@ tasks:
       - verify_all_upgraded
     timeout_seconds: 30
     run: |
-      # Check node status
-      NODE_STATUS=$(kubectl get nodes -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
+      set -e
 
-      # Check pod status
-      POD_STATUS=$(kubectl get pods -A -o jsonpath='{.items[*].status.phase}' | tr ' ' '\n' | sort | uniq)
+      kubectl wait --for=condition=Ready nodes --all --timeout=20s
+      NOT_READY_PODS=$(kubectl get pods -A -o json | jq '[.items[] | select(.status.phase != "Running" and .status.phase != "Succeeded")] | length')
+      kubectl get --raw='/readyz?verbose' >/tmp/readyz
 
-      # Check components status
-      COMPONENTS_HEALTH=$(kubectl get componentstatuses -o jsonpath='{.items[*].conditions[0].type}')
-
-      if [[ "$NODE_STATUS" == "True True True" ]] && \
-         [[ "$POD_STATUS" == "Running" ]] && \
-         [[ "$COMPONENTS_HEALTH" == "Healthy Healthy Healthy" ]]; then
+      if [[ "$NOT_READY_PODS" == "0" ]]; then
         echo "Cluster health verified successfully!"
         exit 0
       else
@@ -613,9 +613,9 @@ tasks:
 
 ---
 
-In this exercise, you will upgrade a multi-node Kubernetes cluster from version 1.30 to version 1.31. You'll need to follow the standard upgrade procedure while ensuring cluster stability throughout the process. Let's begin!
+In this exercise, you will upgrade a multi-node Kubernetes cluster from version 1.34 to version 1.35. You'll need to follow the standard upgrade procedure while ensuring cluster stability throughout the process. Let's begin!
 
-<img src="__static__/kubeadm-upgrade.png" style="margin: 0px auto; max-width: 600px; width: 100%" alt="kubeadm upgrade">
+<img src="__static__/kubeadm-upgrade-1.34-1.35.png" style="margin: 0px auto; max-width: 600px; width: 100%" alt="kubeadm upgrade">
 
 First, upgrade kubeadm on the control plane node:
 
@@ -628,7 +628,7 @@ First, upgrade kubeadm on the control plane node:
 Checking control plane kubeadm version...
 
 #completed
-Great! Control plane kubeadm has been upgraded to version 1.31.
+Great! Control plane kubeadm has been upgraded to version 1.35.
 ::
 
 
@@ -637,14 +637,14 @@ Great! Control plane kubeadm has been upgraded to version 1.31.
 ---
 :summary: Hint 1
 ---
-Follow the guide in the [official docs](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
+Follow the guide in the [official docs](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
 ::
 
 ::hint-box
 ---
 :summary: Hint 2
 ---
-If you need help adding the new minor version package repository, read [these docs](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/change-package-repository/#switching-to-another-kubernetes-package-repository).
+If you need help adding the new minor version package repository, read [these docs](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/change-package-repository/#switching-to-another-kubernetes-package-repository).
 ::
 
 Next, upgrade the control plane:
@@ -658,14 +658,14 @@ Next, upgrade the control plane:
 Verifying control plane upgrade...
 
 #completed
-Excellent! The API server, controller manager, and scheduler are now running version 1.31.
+Excellent! The API server, controller manager, and scheduler are now running version 1.35.
 ::
 
 ::hint-box
 ---
 :summary: Hint 3
 ---
-You can follow the steps [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/#upgrading-control-plane-nodes)
+You can follow the steps [here](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/#upgrading-control-plane-nodes)
 ::
 
 Next, upgrade the control plane components:
@@ -679,14 +679,14 @@ Next, upgrade the control plane components:
 Verifying control plane components upgrade...
 
 #completed
-Excellent! All control plane components are now running version 1.31.
+Excellent! All control plane components are now running version 1.35.
 ::
 
 ::hint-box
 ---
 :summary: Hint 4
 ---
-The steps to upgrade the components (kubelet and kubectl) are [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/#upgrade-kubelet-and-kubectl).
+The steps to upgrade the components (kubelet and kubectl) are [here](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/#upgrade-kubelet-and-kubectl).
 ::
 
 Now, upgrade kubeadm on the worker nodes:
@@ -719,7 +719,7 @@ Perfect! Worker node-03 kubeadm package has been upgraded.
 ---
 :summary: Hint 5
 ---
-The process to upgrade each worker node is [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
+The process to upgrade each worker node is [here](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/).
 ::
 
 Upgrade the worker node-02 itself:
@@ -766,7 +766,7 @@ Upgrade the worker node components on node02:
 Verifying worker node-02 component versions...
 
 #completed
-Great! Worker node-02 components are now running version 1.31.
+Great! Worker node-02 components are now running version 1.35.
 ::
 
 ::hint-box
@@ -792,14 +792,14 @@ Upgrade the worker node components on node03:
 Verifying worker node-03 component versions...
 
 #completed
-Great! Worker node-03 components are now running version 1.31.
+Great! Worker node-03 components are now running version 1.35.
 ::
 
 ::hint-box
 ---
 :summary: Hint 8
 ---
-For each worker node, you can follow the steps [here](https://v1-31.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/#upgrade-kubelet-and-kubectl).
+For each worker node, you can follow the steps [here](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/#upgrade-kubelet-and-kubectl).
 ::
 
 Finally, verify the cluster is healthy:
